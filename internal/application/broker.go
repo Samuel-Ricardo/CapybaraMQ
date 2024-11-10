@@ -33,13 +33,21 @@ func (broker *MessageBroker) Subscribe(topicName string, subscriber entity.Subsc
 	topic.Subscribe(subscriber)
 }
 
-func (broker *MessageBroker) Publish(event entity.Event) {
+func (broker *MessageBroker) Publish(topicName string, event entity.Event) {
 	broker.threadGuard.RLock()
 	defer broker.threadGuard.RUnlock()
 
-	if subscribers, ok := broker.subscribers[event.Name()]; ok {
-		for _, subscriber := range subscribers {
-			go func(subscriber entity.Subscriber, event entity.Event) {
+	topic, exists := broker.topics[topicName]
+	if !exists {
+		log.Println("Topic not found: ", topicName)
+		return
+	}
+
+	topic.Publish(event)
+
+	go func() {
+		for _, subscriber := range topic.Subscribers {
+			go func(subscriber entity.Subscriber) {
 				for _, middleware := range broker.middlewares {
 					if err := middleware(subscriber, event); err != nil {
 						log.Println("Middleware failed: ", err)
@@ -49,8 +57,9 @@ func (broker *MessageBroker) Publish(event entity.Event) {
 
 				if err := subscriber.HandleEvent(event); err != nil {
 					log.Println("Error on handling event: ", err)
+					return
 				}
-			}(subscriber, event)
+			}(subscriber)
 		}
-	}
+	}()
 }
