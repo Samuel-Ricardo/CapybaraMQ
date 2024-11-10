@@ -8,36 +8,36 @@ import (
 )
 
 type MessageBroker struct {
-	topics      map[string]*entity.Topic
-	threadGuard sync.RWMutex
-	middlewares []func(entity.Subscriber, entity.Event) error
+	Topics      map[string]*entity.Topic
+	Middlewares []func(entity.Subscriber, entity.Event) error
+	ThreadGuard sync.RWMutex
 }
 
 func NewMessageBroker(middlewares ...func(entity.Subscriber, entity.Event) error) *MessageBroker {
 	return &MessageBroker{
-		topics:      make(map[string]*entity.Topic),
-		middlewares: middlewares,
+		Topics:      make(map[string]*entity.Topic),
+		Middlewares: middlewares,
 	}
 }
 
 func (broker *MessageBroker) Subscribe(topicName string, subscriber entity.Subscriber) {
-	broker.threadGuard.Lock()
-	defer broker.threadGuard.Unlock()
+	broker.ThreadGuard.Lock()
+	defer broker.ThreadGuard.Unlock()
 
-	topic, exists := broker.topics[topicName]
+	topic, exists := broker.Topics[topicName]
 	if !exists {
 		topic = entity.NewTopic(topicName)
-		broker.topics[topicName] = topic
+		broker.Topics[topicName] = topic
 	}
 
 	topic.Subscribe(subscriber)
 }
 
 func (broker *MessageBroker) Publish(topicName string, event entity.Event) {
-	broker.threadGuard.RLock()
-	defer broker.threadGuard.RUnlock()
+	broker.ThreadGuard.RLock()
+	defer broker.ThreadGuard.RUnlock()
 
-	topic, exists := broker.topics[topicName]
+	topic, exists := broker.Topics[topicName]
 	if !exists {
 		log.Println("Topic not found: ", topicName)
 		return
@@ -48,7 +48,7 @@ func (broker *MessageBroker) Publish(topicName string, event entity.Event) {
 	go func() {
 		for _, subscriber := range topic.Subscribers {
 			go func(subscriber entity.Subscriber) {
-				for _, middleware := range broker.middlewares {
+				for _, middleware := range broker.Middlewares {
 					if err := middleware(subscriber, event); err != nil {
 						log.Println("Middleware failed: ", err)
 						return
@@ -65,10 +65,10 @@ func (broker *MessageBroker) Publish(topicName string, event entity.Event) {
 }
 
 func (broker *MessageBroker) StartConsumer(topicName string) {
-	broker.threadGuard.RLock()
-	defer broker.threadGuard.RUnlock()
+	broker.ThreadGuard.RLock()
+	defer broker.ThreadGuard.RUnlock()
 
-	topic, exists := broker.topics[topicName]
+	topic, exists := broker.Topics[topicName]
 	if !exists {
 		log.Println("Topic not found: ", topicName)
 		return
