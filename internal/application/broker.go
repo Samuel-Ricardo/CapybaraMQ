@@ -63,3 +63,22 @@ func (broker *MessageBroker) Publish(topicName string, event entity.Event) {
 		}
 	}()
 }
+
+func (broker *MessageBroker) StartConsumer(topicName string) {
+	broker.threadGuard.RLock()
+	defer broker.threadGuard.RUnlock()
+
+	topic, exists := broker.topics[topicName]
+	if !exists {
+		log.Println("Topic not found: ", topicName)
+		return
+	}
+
+	go func() {
+		for event := range topic.Queue {
+			for _, subscriber := range topic.Subscribers {
+				go subscriber.HandleEvent(event)
+			}
+		}
+	}()
+}
