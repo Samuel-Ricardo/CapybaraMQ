@@ -8,23 +8,29 @@ import (
 )
 
 type MessageBroker struct {
-	subscribers map[string][]entity.Subscriber
+	topics      map[string]*entity.Topic
 	threadGuard sync.RWMutex
 	middlewares []func(entity.Subscriber, entity.Event) error
 }
 
 func NewMessageBroker(middlewares ...func(entity.Subscriber, entity.Event) error) *MessageBroker {
 	return &MessageBroker{
-		subscribers: make(map[string][]entity.Subscriber),
+		topics:      make(map[string]*entity.Topic),
 		middlewares: middlewares,
 	}
 }
 
-func (broker *MessageBroker) Subscribe(eventType string, subscriber entity.Subscriber) {
+func (broker *MessageBroker) Subscribe(topicName string, subscriber entity.Subscriber) {
 	broker.threadGuard.Lock()
 	defer broker.threadGuard.Unlock()
 
-	broker.subscribers[eventType] = append(broker.subscribers[eventType], subscriber)
+	topic, exists := broker.topics[topicName]
+	if !exists {
+		topic = entity.NewTopic(topicName)
+		broker.topics[topicName] = topic
+	}
+
+	topic.Subscribe(subscriber)
 }
 
 func (broker *MessageBroker) Publish(event entity.Event) {
