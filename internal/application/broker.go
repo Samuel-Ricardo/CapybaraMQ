@@ -56,7 +56,7 @@ func (broker *MessageBroker) Publish(topicName string, event entity.Event) {
 				}
 
 				if err := subscriber.HandleEvent(event); err != nil {
-					log.Println("Error on handling event: ", err)
+					log.Println("Error on subscribe to event: ", err)
 					return
 				}
 			}(subscriber)
@@ -77,7 +77,12 @@ func (broker *MessageBroker) StartConsumer(topicName string) {
 	go func() {
 		for event := range topic.Queue {
 			for _, subscriber := range topic.Subscribers {
-				go subscriber.HandleEvent(event)
+				go func() {
+					if error := subscriber.HandleEvent(event); error != nil {
+						log.Println("Error on handling a event: ", error)
+						return
+					}
+				}()
 			}
 		}
 	}()
