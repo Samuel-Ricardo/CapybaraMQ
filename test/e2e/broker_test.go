@@ -11,7 +11,7 @@ import (
 )
 
 func TestEndToEndEventProcessing(t *testing.T) {
-	bus := application.NewMessageBroker(middleware.WithLogging())
+	broker := application.NewMessageBroker(middleware.WithLogging())
 
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -34,15 +34,45 @@ func TestEndToEndEventProcessing(t *testing.T) {
 		return nil
 	})
 
-	bus.Subscribe("topic1", handler1)
-	bus.Subscribe("topic1", handler2)
-	bus.Subscribe("topic2", handler3)
+	broker.Subscribe("topic1", handler1)
+	broker.Subscribe("topic1", handler2)
+	broker.Subscribe("topic2", handler3)
 
-	bus.StartConsumer("topic1")
-	bus.StartConsumer("topic2")
+	broker.StartConsumer("topic1")
+	broker.StartConsumer("topic2")
 
-	bus.Publish("topic1", entity.SampleEvent{Message: "E2E Test Event for Topic 1"})
-	bus.Publish("topic2", entity.SampleEvent{Message: "E2E Test Event for Topic 2"})
+	broker.Publish("topic1", entity.SampleEvent{Message: "E2E Test Event for Topic 1"})
+	broker.Publish("topic2", entity.SampleEvent{Message: "E2E Test Event for Topic 2"})
 
 	wg.Wait()
+}
+
+func TestEndToEndWithRetriesAndLogging(t *testing.T) {
+	broker := application.NewMessageBroker(middleware.WithLogging(), middleware.WithRetries(3))
+
+	var attempts int
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	handler := entity.NewEventHandler(func(e entity.Event) error {
+		attempts++
+		if attempts < 3 {
+			fmt.Println("Simulated error in handler")
+			return fmt.Errorf("simulated error")
+		}
+		fmt.Printf("Event processed successfully after %d attempts\n", attempts)
+		wg.Done()
+		return nil
+	})
+
+	broker.Subscribe("topic_with_retries", handler)
+	broker.StartConsumer("topic_with_retries")
+
+	broker.Publish("topic_with_retries", entity.SampleEvent{Message: "Event needing retries"})
+
+	wg.Wait()
+
+	if attempts != 3 {
+		t.Fatalf("Expected 3 attempts, got %d", attempts)
+	}
 }
