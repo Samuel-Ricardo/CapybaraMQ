@@ -8,33 +8,47 @@ import (
 )
 
 type MessageBroker struct {
-	subscribers map[string][]entity.Subscriber
-	threadGuard sync.RWMutex
-	middlewares []func(entity.Subscriber, entity.Event) error
+	Topics      map[string]*entity.Topic
+	Middlewares []func(entity.Subscriber, entity.Event) error
+	ThreadGuard sync.RWMutex
 }
 
 func NewMessageBroker(middlewares ...func(entity.Subscriber, entity.Event) error) *MessageBroker {
 	return &MessageBroker{
-		subscribers: make(map[string][]entity.Subscriber),
-		middlewares: middlewares,
+		Topics:      make(map[string]*entity.Topic),
+		Middlewares: middlewares,
 	}
 }
 
-func (broker *MessageBroker) Subscribe(eventType string, subscriber entity.Subscriber) {
-	broker.threadGuard.Lock()
-	defer broker.threadGuard.Unlock()
+func (broker *MessageBroker) Subscribe(topicName string, subscriber entity.Subscriber) {
+	broker.ThreadGuard.Lock()
+	defer broker.ThreadGuard.Unlock()
 
-	broker.subscribers[eventType] = append(broker.subscribers[eventType], subscriber)
+	topic, exists := broker.Topics[topicName]
+	if !exists {
+		topic = entity.NewTopic(topicName)
+		broker.Topics[topicName] = topic
+	}
+
+	topic.Subscribe(subscriber)
 }
 
-func (broker *MessageBroker) Publish(event entity.Event) {
-	broker.threadGuard.RLock()
-	defer broker.threadGuard.RUnlock()
+func (broker *MessageBroker) Publish(topicName string, event entity.Event) {
+	broker.ThreadGuard.RLock()
+	defer broker.ThreadGuard.RUnlock()
 
-	if subscribers, ok := broker.subscribers[event.Name()]; ok {
-		for _, subscriber := range subscribers {
-			go func(subscriber entity.Subscriber, event entity.Event) {
-				for _, middleware := range broker.middlewares {
+	topic, exists := broker.Topics[topicName]
+	if !exists {
+		log.Println("Topic not found: ", topicName)
+		return
+	}
+
+	topic.Publish(event)
+
+	go func() {
+		for _, subscriber := range topic.Subscribers {
+			go func(subscriber entity.Subscriber) {
+				for _, middleware := range broker.Middlewares {
 					if err := middleware(subscriber, event); err != nil {
 						log.Println("Middleware failed: ", err)
 						return
@@ -42,9 +56,34 @@ func (broker *MessageBroker) Publish(event entity.Event) {
 				}
 
 				if err := subscriber.HandleEvent(event); err != nil {
-					log.Println("Error on handling event: ", err)
+					log.Println("Error on subscribe to event: ", err)
+					return
 				}
-			}(subscriber, event)
+			}(subscriber)
 		}
+	}()
+}
+
+func (broker *MessageBroker) StartConsumer(topicName string) {
+	broker.ThreadGuard.RLock()
+	defer broker.ThreadGuard.RUnlock()
+
+	topic, exists := broker.Topics[topicName]
+	if !exists {
+		log.Println("Topic not found: ", topicName)
+		return
 	}
+
+	go func() {
+		for event := range topic.Queue {
+			for _, subscriber := range topic.Subscribers {
+				go func() {
+					if error := subscriber.HandleEvent(event); error != nil {
+						log.Println("Error on handling a event: ", error)
+						return
+					}
+				}()
+			}
+		}
+	}()
 }

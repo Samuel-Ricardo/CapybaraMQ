@@ -8,7 +8,7 @@ import (
 
 func WithLogging() func(entity.Subscriber, entity.Event) error {
 	return func(s entity.Subscriber, e entity.Event) error {
-		log.Printf("Subscriber: %s, Event: %s", s, e)
+		log.Printf("[Middleware] - Subscriber: %s, Event: %s", s, e)
 		return nil
 	}
 }
