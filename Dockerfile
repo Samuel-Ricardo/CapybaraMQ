@@ -1,5 +1,5 @@
 
-FROM golang:1.20-alpine AS builder
+FROM golang:1.22.1-alpine AS builder
 
 WORKDIR /app
 
@@ -9,7 +9,10 @@ RUN go mod tidy
 
 COPY . .
 
-RUN go build -o main .
+RUN go test ./test/unit/ && \
+  go test ./test/integration/ && \
+  go test ./test/e2e/ && \
+  go build -o main.exe ./cmd
 
 
 FROM alpine:latest
@@ -18,9 +21,10 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
-COPY --from=builder /app/main .
+COPY --from=builder /app/.env .
+COPY --from=builder /app/main.exe .
 
 EXPOSE 8080
 
-CMD ["./main"]
+CMD ["./main.exe"]
 
