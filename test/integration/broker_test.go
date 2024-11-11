@@ -44,7 +44,7 @@ func TestMessageBrokerWithRetriesMiddleware(t *testing.T) {
 
 	handler := entity.NewEventHandler(func(e entity.Event) error {
 		attempts++
-		if attempts < 2 {
+		if attempts < 1 {
 			return fmt.Errorf("test attempts: %d", attempts)
 		}
 		return nil

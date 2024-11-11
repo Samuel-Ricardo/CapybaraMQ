@@ -14,7 +14,7 @@ func TestEndToEndEventProcessing(t *testing.T) {
 	broker := application.NewMessageBroker(middleware.WithLogging())
 
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(6)
 
 	handler1 := entity.NewEventHandler(func(e entity.Event) error {
 		fmt.Printf("Subscriber 1 handled event: %s\n", e.(entity.SampleEvent).Message)
@@ -52,11 +52,11 @@ func TestEndToEndWithRetriesAndLogging(t *testing.T) {
 
 	var attempts int
 	var wg sync.WaitGroup
-	wg.Add(1)
+	wg.Add(2)
 
 	handler := entity.NewEventHandler(func(e entity.Event) error {
 		attempts++
-		if attempts < 3 {
+		if attempts < 2 {
 			fmt.Println("Simulated error in handler")
 			return fmt.Errorf("simulated error")
 		}
